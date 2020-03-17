@@ -85,7 +85,7 @@ static void process_display_response(esp_nextion_display_t *display)
         // case 0x00 or 0x00 0x00 0x00
     case NEXTION_RET_INVALID_INSTRUCTION:
 
-        if(display->buffer[1] == 0x00 && display->buffer[2] == 0x00)
+        if (display->buffer[1] == 0x00 && display->buffer[2] == 0x00)
         {
             esp_event_post_to(display->event_loop_handle, ESP_NEXTION_EVENT, ESP_NEXTION_EVENT_START_OR_RESET, NULL, 0, pdMS_TO_TICKS(100));
         }
@@ -102,7 +102,7 @@ static void process_display_response(esp_nextion_display_t *display)
     case NEXTION_RET_CURRENT_PAGE_NUMBER:
         esp_event_post_to(display->event_loop_handle, ESP_NEXTION_EVENT, ESP_NEXTION_EVENT_CURRENT_PAGE_NUMBER, &display->buffer[1], sizeof(uint8_t), pdMS_TO_TICKS(100));
         break;
-    
+
     case NEXTION_RET_TOUCH_COORDINATE_SLEEP:
         esp_event_post_to(display->event_loop_handle, ESP_NEXTION_EVENT, ESP_NEXTION_EVENT_TOUCH_COORDINATE_SLEEP, NULL, 0, pdMS_TO_TICKS(100));
         break;
@@ -117,7 +117,7 @@ static void process_display_response(esp_nextion_display_t *display)
     case NEXTION_RET_AUTO_WAKE_FROM_SLEEP:
         esp_event_post_to(display->event_loop_handle, ESP_NEXTION_EVENT, ESP_NEXTION_EVENT_AUTO_WAKE_FROM_SLEEP, NULL, 0, pdMS_TO_TICKS(100));
         break;
-    
+
     case NEXTION_RET_READY:
         esp_event_post_to(display->event_loop_handle, ESP_NEXTION_EVENT, ESP_NEXTION_EVENT_DISPLAY_READY, NULL, 0, pdMS_TO_TICKS(100));
 
@@ -135,7 +135,7 @@ static void esp_handle_uart_pattern(esp_nextion_display_t *display)
 {
     int pos = uart_pattern_pop_pos(display->uart_port);
     int read_len = 0;
-    
+
     if (pos != -1)
     {
         bzero(display->buffer, ESP_NEXTION_UART_BUFFER_SIZE);
@@ -323,6 +323,30 @@ nextion_display_t *esp_nextion_display_init(const esp_nextion_display_config_t *
 
     NEXTION_CHECK(result == ESP_OK, "Uart GPIO config failed", err_uart_config);
 
+    if (config->uart.rx_pin == UART_PIN_NO_CHANGE && config->uart.tx_pin == UART_PIN_NO_CHANGE && config->uart.wakeup_threshold >= 3)
+    {
+        if (config->uart.uart_port == UART_NUM_0 || config->uart.uart_port == UART_NUM_1)
+        {
+            if (config->uart.uart_port == UART_NUM_0)
+            {
+                PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0RXD_U, FUNC_U0RXD_U0RXD);
+                PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD_U0TXD);
+            }
+            else
+            {
+                PIN_FUNC_SELECT(PERIPHS_IO_MUX_SD_DATA2_U, FUNC_SD_DATA2_U1RXD);
+                PIN_FUNC_SELECT(PERIPHS_IO_MUX_SD_DATA3_U, FUNC_SD_DATA3_U1TXD);
+            }
+
+            uart_set_wakeup_threshold(config->uart.uart_port, config->uart.wakeup_threshold);
+        }
+
+        else if (config->uart.uart_port == UART_NUM_2)
+        {
+            ESP_LOGE(TAG, "Ligth sleep wake up source is not available in Uart 2");
+        }
+    }
+
     result = uart_enable_pattern_det_baud_intr(display->uart_port, '\xFF', 3, 9, 0, 0);
     /* Set pattern queue size */
     result |= uart_pattern_queue_reset(display->uart_port, config->uart.event_queue_size);
@@ -369,7 +393,7 @@ err_mem:
 
 esp_err_t esp_nextion_register_event_handler(nextion_display_t *display, esp_nextion_event_t event_id, esp_event_handler_t handler, void *handler_args)
 {
-    esp_nextion_display_t * esp_nextion_display = __containerof(display, esp_nextion_display_t, parent);
+    esp_nextion_display_t *esp_nextion_display = __containerof(display, esp_nextion_display_t, parent);
     return esp_event_handler_register_with(esp_nextion_display->event_loop_handle, ESP_NEXTION_EVENT, event_id, handler, handler_args);
 }
 

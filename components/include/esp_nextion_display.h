@@ -29,11 +29,12 @@ extern "C"
     {
         struct
         {
-            uart_port_t uart_port;     /*!< UART port number */
-            uint32_t rx_pin;           /*!< UART RX Pin number */
-            uint32_t tx_pin;           /*!< UART TX Pin number */
-            uint32_t baud_rate;        /*!< UART baud rate */
-            uint32_t event_queue_size; /*!< UART event queue size */
+            uart_port_t uart_port;              /*!< UART port number */
+            uint32_t rx_pin;                    /*!< UART RX Pin number */
+            uint32_t tx_pin;                    /*!< UART TX Pin number */
+            uint32_t baud_rate;                 /*!< UART baud rate */
+            uint32_t event_queue_size;          /*!< UART event queue size */
+            uint32_t wakeup_threshold;          /*!< UART wake up threshold */
         } uart;
     } esp_nextion_display_config_t;
 
@@ -49,7 +50,8 @@ extern "C"
             .rx_pin = GPIO_NUM_16,           \
             .tx_pin = GPIO_NUM_17,           \
             .baud_rate = 9600,               \
-            .event_queue_size = 6            \
+            .event_queue_size = 6,           \
+            .wakeup_threshold = 0            \
         }                                    \
     }
 

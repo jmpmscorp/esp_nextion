@@ -2,3 +2,5 @@ build/
 .vscode/
 .cproject
 .project
+sdkconfig
+sdkconfig.old
