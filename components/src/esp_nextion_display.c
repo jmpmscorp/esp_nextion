@@ -66,15 +66,21 @@ ESP_EVENT_DEFINE_BASE(ESP_NEXTION_EVENT);
 
 typedef struct
 {
-    uart_port_t uart_port;                     /*!< UART port */
-    uint8_t *buffer;                           /*!< Internal buffer to store response lines/data from DCE */
-    nextion_display_t parent;                  /*!< Parent class */
-    QueueHandle_t event_queue;                 /*!< UART event queue handle */
-    esp_event_loop_handle_t event_loop_handle; /*!< Event loop handle */
-    TaskHandle_t uart_event_task_handle;       /*!< UART event task handle */
-    SemaphoreHandle_t process_sem;             /*!< Semaphore used for indicating processing status */
+    uart_port_t uart_port;                        /*!< UART port */
+    uint8_t *buffer;                              /*!< Internal buffer to store response lines/data from DCE */
+    nextion_display_t parent;                     /*!< Parent class */
+    nextion_touch_event_data_t *touch_event_data; /*!< Touch Event associated data */
+    QueueHandle_t event_queue;                    /*!< UART event queue handle */
+    esp_event_loop_handle_t event_loop_handle;    /*!< Event loop handle */
+    TaskHandle_t uart_event_task_handle;          /*!< UART event task handle */
+    SemaphoreHandle_t process_sem;                /*!< Semaphore used for indicating processing status */
 } esp_nextion_display_t;
 
+/**
+ * @brief Process commands receive from display through associated UART and emit event if necessary
+ * 
+ * @param display 
+ */
 static void process_display_response(esp_nextion_display_t *display)
 {
     if (!display)
@@ -96,7 +102,12 @@ static void process_display_response(esp_nextion_display_t *display)
         break;
 
     case NEXTION_RET_TOUCH_EVENT:
-        esp_event_post_to(display->event_loop_handle, ESP_NEXTION_EVENT, ESP_NEXTION_EVENT_TOUCH, NULL, 0, pdMS_TO_TICKS(100));
+        // Format is: 0x65 0x00 0x01 0x01 0xFF 0xFF 0xFF where:
+        // Bit 1: Page number       Bit 2: Component ID         Bit 3: Event (0x01 Press, 0x00 Release)
+        display->touch_event_data->page_id = display->buffer[1];
+        display->touch_event_data->component_id = display->buffer[2];
+        display->touch_event_data->event_type = display->buffer[3];
+        esp_event_post_to(display->event_loop_handle, ESP_NEXTION_EVENT, ESP_NEXTION_EVENT_TOUCH, display->touch_event_data, sizeof(nextion_touch_event_data_t), pdMS_TO_TICKS(100));
         break;
 
     case NEXTION_RET_CURRENT_PAGE_NUMBER:
@@ -285,6 +296,7 @@ static esp_err_t esp_nextion_display_deinit(nextion_display_t *display)
 
     uart_driver_delete(esp_nextion_display->uart_port);
 
+    free(esp_nextion_display->touch_event_data);
     free(esp_nextion_display->buffer);
     free(esp_nextion_display);
 
@@ -298,6 +310,10 @@ nextion_display_t *esp_nextion_display_init(const esp_nextion_display_config_t *
     NEXTION_CHECK(display, "Calloc Nextion Display failed", err_mem);
     display->buffer = calloc(1, ESP_NEXTION_UART_BUFFER_SIZE);
     NEXTION_CHECK(display->buffer, "Calloc Nextion RX buffer failed", err_buffer);
+    display->touch_event_data = calloc(1, sizeof(nextion_touch_event_data_t));
+    NEXTION_CHECK(display->touch_event_data, "Calloc Nextion Touch Event data failed", err_touch_event_data);
+
+    /* Initialize object and bind methods */
     display->uart_port = config->uart.uart_port;
 
     display->parent.send_cmd = esp_nextion_display_send_cmd;
@@ -383,6 +399,7 @@ err_eloop:
 err_uart_pattern:
     uart_driver_delete(display->uart_port);
 err_uart_config:
+err_touch_event_data:
     free(display->buffer);
 err_buffer:
     free(display);

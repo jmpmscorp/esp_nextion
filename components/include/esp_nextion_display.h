@@ -25,6 +25,16 @@ extern "C"
         ESP_NEXTION_EVENT_DISPLAY_READY = 0x88,
     } esp_nextion_event_t;
 
+    typedef enum
+    {
+        NEXTION_TOUCH_EVENT_RELEASE,
+        NEXTION_TOUCH_EVENT_PRESS
+    }nextion_touch_event_type_t;
+
+    /**
+     * @brief Display configuration
+     * 
+     */
     typedef struct
     {
         struct
@@ -38,8 +48,16 @@ extern "C"
         } uart;
     } esp_nextion_display_config_t;
 
-/**
-     * @brief ESP Nextion
+
+    typedef struct 
+    {
+        uint8_t page_id;
+        uint8_t component_id;
+        nextion_touch_event_type_t event_type;
+    }nextion_touch_event_data_t;
+    
+    /**
+     * @brief ESP Nextion default configuration
      *
      */
 #define ESP_NEXTION_DISPLAY_CONFIG_DEFAULT() \
