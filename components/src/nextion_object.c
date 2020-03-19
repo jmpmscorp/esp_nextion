@@ -1,4 +1,4 @@
-#include "esp_nextion_object.h"
+#include "nextion_object.h"
 
 #include <string.h>
 
@@ -17,7 +17,7 @@ static const char * TAG = "[Nextion Object]";
     } while (0)
 
 
-esp_err_t esp_nextion_object_fill(nextion_object_t *object, nextion_display_t *display, nextion_descriptor_t *descriptor, bool touchable)
+esp_err_t nextion_object_fill(nextion_object_t *object, nextion_display_t *display, nextion_descriptor_t *descriptor, bool touchable)
 {
     NEXTION_OBJECT_CHECK(object, "NUll object passed", err);
     NEXTION_OBJECT_CHECK(display, "NULL display", err);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp_nextion_object.h"
+#include "nextion_object.h"
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -17,7 +17,7 @@ extern "C"
         esp_err_t (*get_string_value)(const void *variable, const char *value_buffer, size_t size);
     } nextion_variable_t;
 
-    nextion_variable_t *esp_nextion_variable_init(nextion_display_t *display, nextion_descriptor_t *descriptor);
+    nextion_variable_t *nextion_variable_init(nextion_display_t *display, nextion_descriptor_t *descriptor);
 
 #ifdef __cplusplus
 }

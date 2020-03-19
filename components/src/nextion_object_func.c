@@ -1,9 +1,9 @@
-#include "esp_nextion_object_func.h"
+#include "nextion_object_func.h"
 
 #include <string.h>
 
-#include "esp_nextion_display.h"
-#include "esp_nextion_object.h"
+#include "nextion_display.h"
+#include "nextion_object.h"
 
 #include "esp_log.h"
 
@@ -20,7 +20,7 @@ static const char * TAG = "[Nextion Service]";
     } while (0)
 
 
-esp_err_t esp_nextion_object_set_number_value(const void * object, int32_t value)
+esp_err_t nextion_object_set_number_value(const void * object, int32_t value)
 {
     nextion_object_t *obj = (nextion_object_t *)object;
     NEXTION_OBJ_SERVICE_CHECK(obj, "Object NULL", ESP_ERR_INVALID_ARG);    
@@ -32,7 +32,7 @@ esp_err_t esp_nextion_object_set_number_value(const void * object, int32_t value
     return result;
 }
 
-esp_err_t esp_nextion_object_set_string_value(const void * object, const char *value)
+esp_err_t nextion_object_set_string_value(const void * object, const char *value)
 {
     nextion_object_t *obj = (nextion_object_t *)object;
     NEXTION_OBJ_SERVICE_CHECK(obj, "Object NULL", ESP_ERR_INVALID_ARG);    
@@ -45,7 +45,7 @@ esp_err_t esp_nextion_object_set_string_value(const void * object, const char *v
     return result;
 }
 
-esp_err_t esp_nextion_object_set_text(const void *object, const char *text)
+esp_err_t nextion_object_set_text(const void *object, const char *text)
 {
     nextion_object_t *obj = (nextion_object_t *)object;
     NEXTION_OBJ_SERVICE_CHECK(obj, "Object NULL", ESP_ERR_INVALID_ARG);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp_nextion_object.h"
+#include "nextion_object.h"
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -41,7 +41,7 @@ extern "C"
         // esp_err_t (*get_wordwrap_isbr)(nextion_display_t *display, bool *value);
     }nextion_dual_state_button_t;
 
-    nextion_dual_state_button_t *esp_nextion_dual_state_button_init(nextion_display_t *display, nextion_descriptor_t *descriptor);
+    nextion_dual_state_button_t *nextion_dual_state_button_init(nextion_display_t *display, nextion_descriptor_t *descriptor);
 
 #ifdef __cplusplus
 }

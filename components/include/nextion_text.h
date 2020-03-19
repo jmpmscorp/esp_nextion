@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp_nextion_object.h"
+#include "nextion_object.h"
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -11,7 +11,7 @@ extern "C"
     typedef struct
     {
         nextion_object_t parent;
-        esp_err_t (*set_text)(nextion_display_t *display, const char *text);
+        esp_err_t (*set_text)(const void *text_obj, const char *text);
         // esp_err_t (*get_text)(nextion_display_t *display, char *text_buffer, size_t size);
         // esp_err_t (*set_text_max_length)(nextion_display_t *display, uint32_t length);
         // esp_err_t (*get_text_max_length)(nextion_display_t *display, uint32_t *length);
@@ -31,7 +31,7 @@ extern "C"
         // esp_err_t (*get_wordwrap_isbr)(nextion_display_t *display, bool *value);
     } nextion_text_t;
 
-    nextion_text_t *esp_nextion_text_init(nextion_display_t *display, nextion_descriptor_t *descriptor);
+    nextion_text_t *nextion_text_init(nextion_display_t *display, nextion_descriptor_t *descriptor);
 
 #ifdef __cplusplus
 }

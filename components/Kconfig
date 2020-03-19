@@ -1,0 +1,95 @@
+menu "Nextion Display"
+    menu "UART"
+        config NEXTION_MAX_MSG_LENGTH
+            int "Nextion Message Maximum Length"
+            default 48
+            range 48 264
+            help 
+                Maximum message length impact on internal buffer and UART(RX & TX) buffers.
+                Nextion sends larger message when you get strings values. 
+                Maximun Nextion string values are 255, minimum 30. 
+                You should also consider header bytes and 0xFF 0xFF 0xFF end. 
+
+        choice NEXTION_UART
+            prompt "UART for nextion display communication"
+            default NEXTION_UART2_DEFAULT
+            help
+                UART to use for communication with Nextion display.
+
+                - UART0 DEFAULT: UART0, GPIO1(TX), GPIO3(RX).
+                    * If you want to use UART0, you must change or disable LOG console UART
+                - UART1 DEFAULT: UART1, GPIO10(TX), GPIO9(RX).
+                    * Be careful with default UART1 configuration. GPIOs 9 and 10
+                    are used to control flash memory.
+                - UART2 DEFAULT: UART2, GPIO17(TX), GPIO16(RX).
+                - CUSTOM: choose UART and pins
+            
+            config NEXTION_UART0_DEFAULT
+                bool "UART0 Default"
+            config NEXTION_UART1_DEFAULT
+                bool "UART1 Default"
+            config NEXTION_UART2_DEFAULT
+                bool "UART2 Default"
+            config NEXTION_UART_CUSTOM
+                bool "CUSTOM"
+        endchoice
+
+        choice NEXTION_UART_NUM
+            prompt "UART peripheral to communicate with Nextion display"
+            depends on NEXTION_UART_CUSTOM
+            default NEXTION_UART_CUSTOM_NUM_2
+            
+            config NEXTION_UART_CUSTOM_NUM_0
+                bool "UART0"
+            config NEXTION_UART_CUSTOM_NUM_1
+                bool "UART1"
+            config NEXTION_UART_CUSTOM_NUM_2
+                bool "UART2"
+        endchoice
+
+        config NEXTION_UART_NUM
+            int 
+            default 0 if NEXTION_UART0_DEFAULT
+            default 0 if NEXTION_UART_CUSTOM_NUM_0
+            default 1 if NEXTION_UART1_DEFAULT
+            default 1 if NEXTION_UART_CUSTOM_NUM_1
+            default 2 if NEXTION_UART2_DEFAULT
+            default 2 if NEXTION_UART_CUSTOM_NUM_2
+        
+        config NEXTION_UART_TX_PIN
+            int "UART TX on GPIO#"
+            depends on NEXTION_UART_CUSTOM
+            range 0 33
+            default 19
+        
+        config NEXTION_UART_RX_PIN
+            int "UART RX on GPIO#"
+            depends on NEXTION_UART_CUSTOM
+            range 0 39
+            default 21
+        
+        config NEXTION_UART_BAUDRATE
+            int "Baudrate"
+            default 9600
+            range 1200 4000000 
+        
+        config NEXTION_CONFIGURE_UART_THRESHOLD
+            bool "Enable threshold configuration on nextion UART"
+            depends on NEXTION_UART0_DEFAULT || NEXTION_UART1_DEFAULT
+            default n
+            help 
+                Enable it if you plan to use esp light sleep mode / modem sleep mode and want to
+                wake up with UART transmissions. See docs related with light sleep mode and uart wake up source.
+                Only UART0 and UART1 are available as wake up source and only with its default pins.
+                No effect if you use deep sleep mode.
+        
+        config NEXTION_UART_THRESHOLD
+            int "UART threshold"
+            depends on NEXTION_CONFIGURE_UART_THRESHOLD
+            range 3 10
+            default 3
+            help 
+                Min. 3 - Max. 10
+
+    endmenu
+endmenu
