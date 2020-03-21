@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_system.h"
+#include "esp_wifi.h"
 
 #include "nextion_display.h"
 #include "nextion_dual_state_button.h"
@@ -23,8 +24,17 @@ static void nextion_event_handler(void *event_handler_arg, esp_event_base_t even
 
     if(event_id == NEXTION_EVENT_DISPLAY_READY)
     {
-        t0->set_text(t0, "Vina");
-        vtubes->set_number_value(vtubes, 1);
+        ESP_LOGI(TAG, "Display Ready");
+    }
+    else if(event_id == NEXTION_EVENT_CURRENT_PAGE_NUMBER)
+    {
+        uint8_t page = *(uint8_t *)event_data;
+        ESP_LOGI(TAG, "Page Event");
+        if(page == 1)
+        {
+            ESP_LOGI(TAG, "Set TEXT ret: %d", t0->set_text(t0, "Vina"));
+            ESP_LOGI(TAG, "Set NUMBER ret: %d", vtubes->set_number_value(vtubes, 1));
+        }
     }
     else if(event_id == NEXTION_EVENT_TOUCH)
     {
@@ -50,7 +60,7 @@ static void nextion_event_handler(void *event_handler_arg, esp_event_base_t even
 
 void app_main(void)
 {
-    nextion_display_t *display = nextion_display_init();
+    nextion_display_t *display = nextion_display_init(NULL);
     nextion_register_event_handler(display, ESP_EVENT_ANY_ID, nextion_event_handler, display);    
 
     nextion_descriptor_t descriptor = {
@@ -76,10 +86,11 @@ void app_main(void)
 
     vtubes = nextion_variable_init(display, &descriptor);
 
-    display->send_cmd(display, "sleep=0", 1000);
-    display->send_cmd(display, "rest", 1000);
+    display->send_cmd(display, "sleep=0");
+    display->send_cmd(display, "rest");
 
-    
+    // ESP_LOGI(TAG, "Set TEXT ret: %d", t0->set_text(t0, "Vina"));
+    //     ESP_LOGI(TAG, "Set NUMBER ret: %d", vtubes->set_number_value(vtubes, 1));
     // display->send_cmd(display, "ref page1", 1000);
     // dsbtn0->set_value(dsbtn0, 1);
     //display->send_cmd(display, "rest", 1000);

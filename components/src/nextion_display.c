@@ -16,8 +16,6 @@
 #define NEXTION_EV_CURRENT_PAGE_NUMBER (0x66)
 #define NEXTION_EV_TOUCH_COORDINATE_AWAKE (0x67)
 #define NEXTION_EV_TOUCH_COORDINATE_SLEEP (0x68)
-#define NEXTION_EV_STRING_DATA_ENCLOSED (0x70)
-#define NEXTION_EV_NUMERIC_DATA_ENCLOSED (0x71)
 #define NEXTION_EV_AUTO_ENTERED_SLEEP_MODE (0x86)
 #define NEXTION_EV_AUTO_WAKE_FROM_SLEEP (0x87)
 #define NEXTION_EV_READY (0x88)
@@ -31,10 +29,10 @@
 #ifdef CONFIG_NEXTION_CONFIGURE_UART_THRESHOLD
 #define NEXTION_UART_TX_GPIO UART_PIN_NO_CHANGE
 #define NEXTION_UART_RX_GPIO UART_PIN_NO_CHANGE
-#elif defined(CONFIG_NEXTION_UART0_DEFAULT) 
+#elif defined(CONFIG_NEXTION_UART0_DEFAULT)
 #define NEXTION_UART_TX_GPIO GPIO_NUM_1
 #define NEXTION_UART_RX_GPIO GPIO_NUM_3
-#elif defined(CONFIG_NEXTION_UART1_DEFAULT) 
+#elif defined(CONFIG_NEXTION_UART1_DEFAULT)
 #define NEXTION_UART_TX_GPIO GPIO_NUM_10
 #define NEXTION_UART_RX_GPIO GPIO_NUM_9
 #elif defined(CONFIG_NEXTION_UART2_DEFAULT)
@@ -48,7 +46,7 @@
 /* Buffer definitions */
 #define NEXTION_MSG_BUFFER_SIZE CONFIG_NEXTION_MAX_MSG_LENGTH
 /* UART buffers should allocate at least 2 msg */
-#define NEXTION_UART_BUFFER_SIZE (NEXTION_MSG_BUFFER_SIZE * 2 > 128 ? NEXTION_MSG_BUFFER_SIZE * 2 + 1 : 129)    
+#define NEXTION_UART_BUFFER_SIZE (NEXTION_MSG_BUFFER_SIZE * 2 > 128 ? NEXTION_MSG_BUFFER_SIZE * 2 + 1 : 129)
 
 /* Queues definitions */
 #define NEXTION_UART_QUEUE_SIZE (20)
@@ -68,16 +66,29 @@ static const char *TAG = "[Nextion Display]";
 
 ESP_EVENT_DEFINE_BASE(NEXTION_EVENT);
 
+/**
+ * @brief Container for expected command response values
+ * 
+ */
 typedef struct
 {
-    uart_port_t uart_port;                        /*!< UART port */
-    uint8_t *msg_buffer;                          /*!< Internal buffer to store messages from Nextion display */
-    nextion_display_t parent;                     /*!< Parent class */
-    nextion_touch_event_data_t *touch_event_data; /*!< Touch Event associated data */
-    QueueHandle_t uart_event_queue;               /*!< UART event queue handle */
-    esp_event_loop_handle_t event_loop_handle;    /*!< Event loop handle */
-    TaskHandle_t uart_event_task_handle;          /*!< UART event task handle */
-    SemaphoreHandle_t process_sem;                /*!< Semaphore used for indicating processing status */
+    nextion_err_t *err;
+    void *msg_data;     /*!< const char *buffer if msg response is string. uint32_t if msg response is number  */
+    size_t *msg_length; /*!< Usefull when msg response is string */
+} nextion_msg_decode_resources_t;
+
+typedef struct
+{
+    uart_port_t uart_port;                            /*!< UART port */
+    uint8_t *msg_buffer;                              /*!< Internal buffer to store messages from Nextion display */
+    nextion_display_t parent;                         /*!< Parent class */
+    nextion_system_variables_t system_variables;      /*!< Nextion System Variables */
+    nextion_touch_event_data_t *touch_event_data;     /*!< Touch Event associated data */
+    nextion_msg_decode_resources_t *decode_resources; /*!< Decode resources */
+    QueueHandle_t uart_event_queue;                   /*!< UART event queue handle */
+    esp_event_loop_handle_t event_loop_handle;        /*!< Event loop handle */
+    TaskHandle_t uart_event_task_handle;              /*!< UART event task handle */
+    SemaphoreHandle_t process_sem;                    /*!< Semaphore used for indicating processing status */
 } esp_nextion_display_t;
 
 /**
@@ -101,8 +112,35 @@ static void nextion_msg_handler(esp_nextion_display_t *display)
         }
         break;
 
+    case NEXTION_SUCCESFULL_INSTRUCTION:
+    case NEXTION_INVALID_COMPONENT_ID:
+    case NEXTION_INVALID_PAGE_ID:
+    case NEXTION_INVALID_PICTURE_ID:
+    case NEXTION_INVALID_FONT_ID:
+    case NEXTION_INVALID_FILE_OPERATION:
+    case NEXTION_INVALID_CRC:
+    case NEXTION_INVALID_BAUDRATE_SETTING:
+    case NEXTION_INVALID_WAVEFORM_ID_OR_CHANNEL:
+    case NEXTION_INVALID_VARIABLE_NAME_OR_ATTRIBUTE:
+    case NEXTION_INVALID_VARIABLE_OPERATION:
+    case NEXTION_ASSIGNEMENT_FAILED_TO_ASSIGN:
+    case NEXTION_EEPROM_OPERATION_FAILED:
+    case NEXTION_INVALID_QUANTITY_OF_PARAMETERS:
+    case NEXTION_IO_OPERATION_FAILED:
+    case NEXTION_ESCAPE_CHARACTER_INVALID:
+    case NEXTION_VARIABLE_NAME_TOO_LONG:
+        ESP_LOGI(TAG, "Aqui");
+
+        if (display->decode_resources && display->decode_resources->err)
+        {
+
+            *display->decode_resources->err = (nextion_err_t)display->msg_buffer[0];
+            xSemaphoreGive(display->process_sem);
+        }
+        break;
+
     case NEXTION_EV_SERIAL_BUFFER_OVERFLOW:
-        esp_event_post_to(display->event_loop_handle, NEXTION_EVENT, NEXTION_EVENT_SERIAL_BUFFER_OVERFLOW, NULL, 0, pdMS_TO_TICKS(100));
+        esp_event_post_to(display->event_loop_handle, NEXTION_EVENT, NEXTION_EVENT_SERIAL_BUFFER_OVERFLOW, NULL, 0, pdMS_TO_TICKS(500));
         break;
 
     case NEXTION_EV_TOUCH_EVENT:
@@ -180,20 +218,6 @@ static void esp_handle_uart_pattern(esp_nextion_display_t *display)
     }
 }
 
-/**
- * @brief Handle when new data received by UART
- *
- * @param esp_dte ESP32 Modem DTE object
- */
-static void esp_handle_uart_data(esp_nextion_display_t *display)
-{
-    ESP_LOGI(TAG, "Received uart data");
-    size_t length = 0;
-    uart_get_buffered_data_len(display->uart_port, &length);
-    length = MIN(NEXTION_MSG_BUFFER_SIZE, length);
-
-    length = uart_read_bytes(display->uart_port, display->msg_buffer, length, portMAX_DELAY);
-}
 
 /**
  * @brief UART Event Task Entry
@@ -213,7 +237,6 @@ static void uart_event_task(void *arg)
             switch (event.type)
             {
             case UART_DATA:
-                esp_handle_uart_data(display);
                 break;
             case UART_FIFO_OVF:
                 ESP_LOGW(TAG, "HW FIFO Overflow");
@@ -243,7 +266,7 @@ static void uart_event_task(void *arg)
             }
         }
         /* Drive the event loop */
-        esp_event_loop_run(display->event_loop_handle, pdMS_TO_TICKS(50));
+        // esp_event_loop_run(display->event_loop_handle, pdMS_TO_TICKS(50));
     }
     vTaskDelete(NULL);
 }
@@ -255,18 +278,53 @@ static void uart_event_task(void *arg)
  * @param cmd  command to send
  * @param timeout   maximum timeout to wait response, if needed
  * @return nextion_err_t 
- *      - NEXTION_SUCCESFULL_INSTRUCTION on success
- *      - NEXTION_INVALID_INSTRUCTION otherwise
+ *      - NEXTION_ERR_T value on success
+ *      - NEXTION_INVALID_ARGS if any param is null
+ *      - NEXTION_MEM_ERR if decode resources allocation fail
+ *      - NEXTION_TIMEOUT
  */
-static nextion_err_t esp_nextion_display_send_cmd(nextion_display_t *display, const char *cmd, uint32_t timeout)
+static nextion_err_t esp_nextion_display_send_cmd(nextion_display_t *display, const char *cmd)
 {
-    NEXTION_CHECK(cmd, "CMD is null", err);
+    NEXTION_CHECK(cmd, "CMD is null", err_args);
+    NEXTION_CHECK(display, "Display is NULL", err_args);
     esp_nextion_display_t *esp_nextion_display = __containerof(display, esp_nextion_display_t, parent);
+
+    // esp_nextion_display->cmd_decode_resources.err = &err;
     uart_write_bytes(esp_nextion_display->uart_port, cmd, strlen(cmd));
     uart_write_bytes(esp_nextion_display->uart_port, "\xFF\xFF\xFF", 3);
-    return NEXTION_SUCCESFULL_INSTRUCTION;
-err:
-    return NEXTION_INVALID_INSTRUCTION;
+
+    esp_nextion_display->decode_resources = calloc(1, sizeof(nextion_msg_decode_resources_t));
+
+    NEXTION_CHECK(esp_nextion_display->decode_resources, "Allocation resources error", err_mem);
+
+    nextion_err_t err;
+    esp_nextion_display->decode_resources->err = &err;
+
+    if (esp_nextion_display->system_variables.bkcmd == 0)
+    {
+        err = NEXTION_SUCCESFULL_INSTRUCTION;
+    }
+    else if (xSemaphoreTake(esp_nextion_display->process_sem, pdMS_TO_TICKS(250)) == pdFALSE)
+    {
+        // When bkcmd = 2, display only returns message if there is an error, so if we don't get return, we suppose it's ok
+        if (esp_nextion_display->system_variables.bkcmd == 2)
+        {
+            err = NEXTION_SUCCESFULL_INSTRUCTION;
+        }
+        else // bkcmd = 1 | bkcmd = 3
+        {
+            err = NEXTION_TIMEOUT;
+        }
+    }
+
+    free(esp_nextion_display->decode_resources);
+    esp_nextion_display->decode_resources = NULL;
+
+    return err;
+err_args:
+    return NEXTION_INVALID_ARGS;
+err_mem:
+    return NEXTION_MEM_ERR;
 }
 
 /**
@@ -308,7 +366,57 @@ static esp_err_t esp_nextion_display_deinit(nextion_display_t *display)
     return ESP_OK;
 }
 
-nextion_display_t *nextion_display_init()
+static void esp_nextion_config_system_variables(esp_nextion_display_t *display, nextion_system_variables_t *system_variables)
+{
+    nextion_system_variables_t sv = NEXTION_SYSTEM_VARIABLES_DEAFULT();
+
+    if (system_variables)
+    {
+        if (system_variables->bkcmd != sv.bkcmd)
+        {
+            sv.bkcmd = system_variables->bkcmd;
+        }
+
+        if (system_variables->dp != sv.dp)
+        {
+            sv.dp = system_variables->dp;
+        }
+
+        if (system_variables->dims != sv.dims)
+        {
+            sv.dims = system_variables->dims;
+        }
+
+        if (system_variables->sendxy != sv.sendxy)
+        {
+            sv.sendxy = system_variables->sendxy;
+        }
+
+        if (system_variables->thsp != sv.thsp)
+        {
+            sv.thsp = system_variables->thsp;
+        }
+
+        if (system_variables->thup != sv.thup)
+        {
+            sv.thup = system_variables->thup;
+        }
+
+        if (system_variables->ussp != sv.ussp)
+        {
+            sv.ussp = system_variables->ussp;
+        }
+
+        if (system_variables->usup != sv.usup)
+        {
+            sv.usup = system_variables->usup;
+        }
+    }
+
+    display->system_variables = sv;
+}
+
+nextion_display_t *nextion_display_init(nextion_system_variables_t *system_variables)
 {
     esp_err_t result;
     esp_nextion_display_t *display = calloc(1, sizeof(esp_nextion_display_t));
@@ -320,7 +428,7 @@ nextion_display_t *nextion_display_init()
 
     /* Initialize object and bind methods */
     display->uart_port = NEXTION_UART_NUM;
-
+    esp_nextion_config_system_variables(display, system_variables);
     display->parent.send_cmd = esp_nextion_display_send_cmd;
     display->parent.deinit = esp_nextion_display_deinit;
 
@@ -331,14 +439,19 @@ nextion_display_t *nextion_display_init()
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB};
+#if CONFIG_PM_ENABLE
+        .source_clk = UART_SCLK_REF_TICK
+#else
+        .source_clk = UART_SCLK_APB
+#endif
+    };
 
-    
+    NEXTION_CHECK(uart_param_config(display->uart_port, &uart_config) == ESP_OK, "config uart parameter failed", err_uart_config);
+
     result = uart_driver_install(display->uart_port, NEXTION_UART_BUFFER_SIZE, NEXTION_UART_BUFFER_SIZE,
                                  NEXTION_UART_QUEUE_SIZE, &display->uart_event_queue, 0);
 
     NEXTION_CHECK(result == ESP_OK, "Uart Port driver install failed", err_uart_config);
-    NEXTION_CHECK(uart_param_config(display->uart_port, &uart_config) == ESP_OK, "config uart parameter failed", err_uart_config);
 
     result = uart_set_pin(display->uart_port, NEXTION_UART_TX_GPIO, NEXTION_UART_RX_GPIO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
@@ -364,7 +477,9 @@ nextion_display_t *nextion_display_init()
     /* Create Event loop */
     esp_event_loop_args_t loop_args = {
         .queue_size = NEXTION_EVENT_QUEUE_SIZE,
-        .task_name = NULL};
+        .task_name = "Nextion Ev Task",
+        .task_stack_size = configMINIMAL_STACK_SIZE * 3,
+    };
 
     NEXTION_CHECK(esp_event_loop_create(&loop_args, &display->event_loop_handle) == ESP_OK, "create event loop failed", err_eloop);
 

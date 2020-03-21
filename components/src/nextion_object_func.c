@@ -27,7 +27,7 @@ esp_err_t nextion_object_set_number_value(const void * object, int32_t value)
     char *cmd = malloc(40 * sizeof(char));
     bzero(cmd, 40);
     sprintf(cmd, "%s.val=%d", obj->descriptor.name, value);
-    esp_err_t result = obj->display->send_cmd(obj->display, cmd, 1000);
+    esp_err_t result = obj->display->send_cmd(obj->display, cmd);
     free(cmd);
     return result;
 }
@@ -40,7 +40,7 @@ esp_err_t nextion_object_set_string_value(const void * object, const char *value
     char *cmd = malloc(40 * sizeof(char));
     bzero(cmd, 40);
     sprintf(cmd, "%s.val=\"%s\"",obj->descriptor.name, value);
-    esp_err_t result = obj->display->send_cmd(obj->display, cmd, 1000);
+    esp_err_t result = obj->display->send_cmd(obj->display, cmd);
     free(cmd);
     return result;
 }
@@ -53,7 +53,7 @@ esp_err_t nextion_object_set_text(const void *object, const char *text)
     char *cmd = malloc(40 * sizeof(char));
     bzero(cmd, 40);
     sprintf(cmd, "%s.txt=\"%s\"", obj->descriptor.name, text);
-    esp_err_t result = obj->display->send_cmd(obj->display, cmd, 1000);
+    esp_err_t result = obj->display->send_cmd(obj->display, cmd);
     free(cmd);
     return result;
 }

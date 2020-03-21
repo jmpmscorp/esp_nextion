@@ -50,8 +50,25 @@ extern "C"
         NEXTION_INVALID_QUANTITY_OF_PARAMETERS = 0x1E,
         NEXTION_IO_OPERATION_FAILED = 0x1F,
         NEXTION_ESCAPE_CHARACTER_INVALID = 0x20,
-        NEXTION_VARIABLE_NAME_TOO_LONG = 0x23
+        NEXTION_VARIABLE_NAME_TOO_LONG = 0x23,
+        NEXTION_STRING_DATA_ENCLOSED = 0x070,
+        NEXTION_NUMERIC_DATA_ENCLOSED = 0x71,
+        NEXTION_TIMEOUT = 0xFD,
+        NEXTION_MEM_ERR = 0xFE,
+        NEXTION_INVALID_ARGS = 0xFF
     } nextion_err_t;
+
+    typedef struct
+    {
+        uint8_t dp;
+        uint8_t dims;
+        uint16_t ussp;
+        uint16_t thsp;
+        uint8_t thup;
+        uint8_t sendxy;
+        uint8_t bkcmd;
+        uint8_t usup;
+    } nextion_system_variables_t;
 
     typedef struct
     {
@@ -62,13 +79,26 @@ extern "C"
 
     typedef struct nextion_display nextion_display_t;
 
+
+#define NEXTION_SYSTEM_VARIABLES_DEAFULT() { \
+    .dp = 0,                                 \
+    .dims = 100,                             \
+    .ussp = 0,                               \
+    .thsp = 30,                              \
+    .thup = 0,                               \
+    .sendxy = 0,                             \
+    .bkcmd = 2,                              \
+    .usup = 0                               \
+};
     /**
      * @brief Nextion Display Object
      * 
      */
     struct nextion_display
     {
-        nextion_err_t (*send_cmd)(nextion_display_t *display, const char *cmd, uint32_t timeout);
+        nextion_err_t (*send_cmd)(nextion_display_t *display, const char *cmd);
+        nextion_err_t (*send_cmd_get_value)(nextion_display_t *display, const char *cmd, uint32_t *value);
+        nextion_err_t (*send_cmd_get_string)(nextion_display_t *display, const char *cmd, const char *string_ret, size_t *size_ret);
         esp_err_t (*deinit)(nextion_display_t *display);
     };
 
@@ -81,7 +111,7 @@ extern "C"
      *      - Display Object on success
      *      - NULL on fail
      */
-    nextion_display_t *nextion_display_init();
+    nextion_display_t *nextion_display_init(nextion_system_variables_t *system_variables);
 
     /**
      * @brief Register event handler for nextion display event loop
