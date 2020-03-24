@@ -21,7 +21,7 @@ extern "C"
         bool touchable;
     } nextion_object_t;
 
-    esp_err_t nextion_object_fill(nextion_object_t *object, nextion_display_t *display, nextion_descriptor_t *descriptor, bool touchable);
+    esp_err_t nextion_object_fill(nextion_object_t *object, const nextion_display_t *display, nextion_descriptor_t *descriptor, bool touchable);
 
 #ifdef __cplusplus
 }

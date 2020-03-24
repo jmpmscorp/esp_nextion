@@ -90,6 +90,12 @@ menu "Nextion Display"
             default 3
             help 
                 Min. 3 - Max. 10
+        
+        config NEXTION_ENABLE_DEBUG_UART_DATA
+            bool "Enable DEBUG UART data"
+            default n
+            help 
+                Enable to see UART data bytes received in UART. You will see data when UART pattern event is fired.
 
     endmenu
 endmenu

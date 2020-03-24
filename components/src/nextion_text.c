@@ -6,7 +6,7 @@
 
 static const char * TAG = "[Nex Text]";
 
-nextion_text_t *nextion_text_init(nextion_display_t *display, nextion_descriptor_t *descriptor)
+nextion_text_t *nextion_text_init(const nextion_display_t *display, nextion_descriptor_t *descriptor)
 {   
     nextion_text_t *text_obj = calloc(1, sizeof(nextion_text_t));
 

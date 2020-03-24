@@ -11,7 +11,7 @@ extern "C"
     typedef struct
     {
         nextion_object_t parent;
-        esp_err_t (*set_value)(const void *xfloat, int32_t value);
+        nextion_err_t (*set_value)(const void *xfloat, int32_t value);
         // esp_err_t (*get_value)(nextion_display_t *display, uint32_t *value);
         // esp_err_t (*set_place_xcen)(nextion_display_t *display, uint32_t number);
         // esp_err_t (*get_place_xcen)(nextion_display_t *display, uint32_t *number);
@@ -35,7 +35,7 @@ extern "C"
         // esp_err_t (*get_wordwrap_isbr)(nextion_display_t *display, bool *value);
     } nextion_xfloat_t;
 
-    nextion_xfloat_t *nextion_xfloat_init(nextion_display_t *display, nextion_descriptor_t *descriptor);
+    nextion_xfloat_t *nextion_xfloat_init(const nextion_display_t *display, nextion_descriptor_t *descriptor);
 #ifdef __cplusplus
 }
 #endif

@@ -13,7 +13,7 @@ extern "C"
         nextion_object_t parent;
         // esp_err_t (*set_text)(nextion_display_t *display, const char *text);
         // esp_err_t (*get_text)(nextion_display_t *display, char *text_buffer, size_t size);
-        esp_err_t (*set_value)(const void *dsbtn, int32_t value);
+        nextion_err_t (*set_value)(const void *dsbtn, int32_t value);
         // esp_err_t (*get_value)(nextion_display_t *display, uint32_t *value);
         // esp_err_t (*set_background_color_bco)(nextion_display_t *display, uint32_t color);
         // esp_err_t (*get_background_color_bco)(nextion_display_t *display, uint32_t *color);
@@ -41,7 +41,7 @@ extern "C"
         // esp_err_t (*get_wordwrap_isbr)(nextion_display_t *display, bool *value);
     }nextion_dual_state_button_t;
 
-    nextion_dual_state_button_t *nextion_dual_state_button_init(nextion_display_t *display, nextion_descriptor_t *descriptor);
+    nextion_dual_state_button_t *nextion_dual_state_button_init(const nextion_display_t *display, nextion_descriptor_t *descriptor);
 
 #ifdef __cplusplus
 }

@@ -5,7 +5,7 @@
 
 static const char * TAG = "[Nex Xfloat]";
 
-nextion_xfloat_t *nextion_xfloat_init(nextion_display_t *display, nextion_descriptor_t *descriptor)
+nextion_xfloat_t *nextion_xfloat_init(const nextion_display_t *display, nextion_descriptor_t *descriptor)
 {   
     nextion_xfloat_t *xfloat = calloc(1, sizeof(nextion_xfloat_t));
 

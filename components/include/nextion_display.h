@@ -79,7 +79,6 @@ extern "C"
 
     typedef struct nextion_display nextion_display_t;
 
-
 #define NEXTION_SYSTEM_VARIABLES_DEAFULT() { \
     .dp = 0,                                 \
     .dims = 100,                             \
@@ -88,17 +87,16 @@ extern "C"
     .thup = 0,                               \
     .sendxy = 0,                             \
     .bkcmd = 2,                              \
-    .usup = 0                               \
-};
+    .usup = 0};
     /**
      * @brief Nextion Display Object
      * 
      */
     struct nextion_display
     {
-        nextion_err_t (*send_cmd)(nextion_display_t *display, const char *cmd);
-        nextion_err_t (*send_cmd_get_value)(nextion_display_t *display, const char *cmd, uint32_t *value);
-        nextion_err_t (*send_cmd_get_string)(nextion_display_t *display, const char *cmd, const char *string_ret, size_t *size_ret);
+        nextion_err_t (*send_cmd)(const nextion_display_t *display, const char *cmd);
+        nextion_err_t (*send_cmd_get_number)(const nextion_display_t *display, const char *cmd, int32_t *number);
+        nextion_err_t (*send_cmd_get_string)(const nextion_display_t *display, const char *cmd, const char *string_ret, size_t *size_ret);
         esp_err_t (*deinit)(nextion_display_t *display);
     };
 
@@ -125,7 +123,7 @@ extern "C"
      *      - ESP_ERR_NO_MEM on allocating memory for the handler failed
      *      - ESP_ERR_INVALID_ARG on invalid combination of event base and event id
      */
-    esp_err_t nextion_register_event_handler(nextion_display_t *display, nextion_event_t event_id, esp_event_handler_t handler, void *handler_args);
+    esp_err_t nextion_register_event_handler(const nextion_display_t *display, nextion_event_t event_id, esp_event_handler_t handler, void *handler_args);
 
     /**
      * @brief Unregister event handler for nextion display event loop
@@ -137,7 +135,7 @@ extern "C"
      *      - ESP_OK on success
      *      - ESP_ERR_INVALID_ARG on invalid combination of event base and event id
      */
-    esp_err_t nextion_unregister_event_handler(nextion_display_t *display, nextion_event_t event_id, esp_event_handler_t handler);
+    esp_err_t nextion_unregister_event_handler(const nextion_display_t *display, nextion_event_t event_id, esp_event_handler_t handler);
 
 #ifdef __cplusplus
 }

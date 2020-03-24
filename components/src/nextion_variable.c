@@ -6,7 +6,7 @@
 
 static const char * TAG = "[Nex Variable]";
 
-nextion_variable_t *nextion_variable_init(nextion_display_t *display, nextion_descriptor_t *descriptor)
+nextion_variable_t *nextion_variable_init(const nextion_display_t *display, nextion_descriptor_t *descriptor)
 {   
     nextion_variable_t *var = calloc(1, sizeof(nextion_variable_t));
 

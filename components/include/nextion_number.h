@@ -11,7 +11,7 @@ extern "C"
     typedef struct
     {
         nextion_object_t parent;
-        // esp_err_t (*set_value)(nextion_display_t *display, uint32_t value);
+        nextion_err_t (*set_value)(void *nextion_number, int32_t value);
         // esp_err_t (*get_value)(nextion_display_t *display, uint32_t *value);
         // esp_err_t (*set_background_color_bco)(nextion_display_t *display, uint32_t color);
         // esp_err_t (*get_background_color_bco)(nextion_display_t *display, uint32_t *color);
@@ -33,6 +33,7 @@ extern "C"
         // esp_err_t (*get_wordwrap_isbr)(nextion_display_t *display, bool *value);
     } nextion_number_t;
 
+    nextion_number_t *nextion_number_init(const nextion_display_t *display, nextion_descriptor_t *descriptor);
 #ifdef __cplusplus
 }
 #endif

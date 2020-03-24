@@ -5,7 +5,7 @@
 
 static const char * TAG = "[Nex Dual St Button]";
 
-nextion_dual_state_button_t *nextion_dual_state_button_init(nextion_display_t *display, nextion_descriptor_t *descriptor)
+nextion_dual_state_button_t *nextion_dual_state_button_init(const nextion_display_t *display, nextion_descriptor_t *descriptor)
 {   
     nextion_dual_state_button_t *dsbtn = calloc(1, sizeof(nextion_dual_state_button_t));
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp_nextion_object.h"
+#include "nextion_object.h"
 
 #include "esp_err.h"
 
@@ -12,8 +12,8 @@ extern "C"
 
     struct nextion_button
     {
-        nextion_object_t * parent;
-        // esp_err_t (*set_text)(nextion_button_t * button, const char *text);
+        nextion_object_t parent;
+        nextion_err_t (*set_text)(const void *button, const char *text);
         // esp_err_t (*get_text)(nextion_display_t *display, char *text_buffer, size_t size);
         // esp_err_t (*set_background_color_bco)(nextion_display_t *display, uint32_t color);
         // esp_err_t (*get_background_color_bco)(nextion_display_t *display, uint32_t *color);
@@ -41,6 +41,7 @@ extern "C"
         // esp_err_t (*get_wordwrap_isbr)(nextion_display_t *display, bool *value);
     };
 
+    nextion_button_t *nextion_button_init(const nextion_display_t *display, nextion_descriptor_t *descriptor);
 #ifdef __cplusplus
 }
 #endif

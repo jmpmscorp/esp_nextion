@@ -66,15 +66,11 @@ static const char *TAG = "[Nextion Display]";
 
 ESP_EVENT_DEFINE_BASE(NEXTION_EVENT);
 
-/**
- * @brief Container for expected command response values
- * 
- */
 typedef struct
 {
     nextion_err_t *err;
-    void *msg_data;     /*!< const char *buffer if msg response is string. uint32_t if msg response is number  */
-    size_t *msg_length; /*!< Usefull when msg response is string */
+    void *ret_value; /*!< Number or string return by display */
+    size_t *size;    /*!< Only usefull when ret_value is string */
 } nextion_msg_decode_resources_t;
 
 typedef struct
@@ -84,11 +80,12 @@ typedef struct
     nextion_display_t parent;                         /*!< Parent class */
     nextion_system_variables_t system_variables;      /*!< Nextion System Variables */
     nextion_touch_event_data_t *touch_event_data;     /*!< Touch Event associated data */
-    nextion_msg_decode_resources_t *decode_resources; /*!< Decode resources */
+    nextion_msg_decode_resources_t *decode_resources; /*!< Resources use when any task is waiting response from display */
     QueueHandle_t uart_event_queue;                   /*!< UART event queue handle */
     esp_event_loop_handle_t event_loop_handle;        /*!< Event loop handle */
     TaskHandle_t uart_event_task_handle;              /*!< UART event task handle */
     SemaphoreHandle_t process_sem;                    /*!< Semaphore used for indicating processing status */
+    SemaphoreHandle_t access_mutex;                   /*!< Mutex to control unique access to shared display resources */
 } esp_nextion_display_t;
 
 /**
@@ -110,6 +107,11 @@ static void nextion_msg_handler(esp_nextion_display_t *display)
         {
             esp_event_post_to(display->event_loop_handle, NEXTION_EVENT, NEXTION_EVENT_START_OR_RESET, NULL, 0, pdMS_TO_TICKS(100));
         }
+        else if (display->decode_resources && display->decode_resources->err)
+        {
+            *display->decode_resources->err = display->msg_buffer[0];
+            xSemaphoreGive(display->process_sem);
+        }
         break;
 
     case NEXTION_SUCCESFULL_INSTRUCTION:
@@ -129,12 +131,9 @@ static void nextion_msg_handler(esp_nextion_display_t *display)
     case NEXTION_IO_OPERATION_FAILED:
     case NEXTION_ESCAPE_CHARACTER_INVALID:
     case NEXTION_VARIABLE_NAME_TOO_LONG:
-        ESP_LOGI(TAG, "Aqui");
-
         if (display->decode_resources && display->decode_resources->err)
         {
-
-            *display->decode_resources->err = (nextion_err_t)display->msg_buffer[0];
+            *display->decode_resources->err = display->msg_buffer[0];
             xSemaphoreGive(display->process_sem);
         }
         break;
@@ -198,12 +197,13 @@ static void esp_handle_uart_pattern(esp_nextion_display_t *display)
 
         if (read_len > 0)
         {
-            // ESP_LOGI(TAG, "Receive: %d", read_len);
+#if CONFIG_NEXTION_ENABLE_DEBUG_UART_DATA
             for (size_t i = 0; i < read_len; ++i)
             {
                 printf("%x ", display->msg_buffer[i]);
             }
             printf("\r\n");
+#endif
             nextion_msg_handler(display);
         }
         else
@@ -217,7 +217,6 @@ static void esp_handle_uart_pattern(esp_nextion_display_t *display)
         uart_flush(display->uart_port);
     }
 }
-
 
 /**
  * @brief UART Event Task Entry
@@ -272,61 +271,150 @@ static void uart_event_task(void *arg)
 }
 
 /**
+ * @brief Wait response from display to any command send
+ * 
+ * @param display[in]   display object
+ * @param param1[out]   string when 0x70 is required, number when 0x71
+ * @param param2[out]   size of string when 0x70
+ * @return nextion_err_t 
+ */
+static nextion_err_t esp_nextion_display_wait_response(esp_nextion_display_t *display, void *param1, void *param2)
+{
+    nextion_err_t err;
+
+    if (xSemaphoreTake(display->access_mutex, pdMS_TO_TICKS(250)))
+    {
+
+        display->decode_resources = calloc(1, sizeof(nextion_msg_decode_resources_t));
+
+        if (!display->decode_resources)
+        {
+            xSemaphoreGive(display->access_mutex);
+            return NEXTION_MEM_ERR;
+        }
+
+        if (display->system_variables.bkcmd == 0)
+        {
+            // If bkcmd=0, response are disabled. Return always succesfull
+            err = NEXTION_SUCCESFULL_INSTRUCTION;
+        }
+        else
+        {
+            display->decode_resources->err = &err;
+            display->decode_resources->ret_value = param1;
+            display->decode_resources->size = param2;
+
+            // If no semaphore take, response isn't ready
+            if (xSemaphoreTake(display->process_sem, pdMS_TO_TICKS(250)) == pdFALSE)
+            {
+                // When bkcmd = 2, display only returns message if there is an error, so if we don't get return, we suppose it's ok
+                if (display->system_variables.bkcmd == 2)
+                {
+                    err = NEXTION_SUCCESFULL_INSTRUCTION;
+                }
+                else // bkcmd = 1 | bkcmd = 3
+                {
+                    err = NEXTION_TIMEOUT;
+                }
+            }
+            else // Response is ready
+            {
+                err = *display->decode_resources->err;
+            }
+        }
+
+        free(display->decode_resources);
+        display->decode_resources = NULL;
+
+        xSemaphoreGive(display->access_mutex);
+    }
+
+    return err;
+}
+
+/**
  * @brief Send command to display
  * 
  * @param display display object
  * @param cmd  command to send
- * @param timeout   maximum timeout to wait response, if needed
  * @return nextion_err_t 
- *      - NEXTION_ERR_T value on success
+ *      - NEXTION_ERR_T value on transfer success
  *      - NEXTION_INVALID_ARGS if any param is null
  *      - NEXTION_MEM_ERR if decode resources allocation fail
  *      - NEXTION_TIMEOUT
  */
-static nextion_err_t esp_nextion_display_send_cmd(nextion_display_t *display, const char *cmd)
+static nextion_err_t esp_nextion_display_send_cmd(const nextion_display_t *display, const char *cmd)
 {
     NEXTION_CHECK(cmd, "CMD is null", err_args);
     NEXTION_CHECK(display, "Display is NULL", err_args);
+
     esp_nextion_display_t *esp_nextion_display = __containerof(display, esp_nextion_display_t, parent);
 
-    // esp_nextion_display->cmd_decode_resources.err = &err;
     uart_write_bytes(esp_nextion_display->uart_port, cmd, strlen(cmd));
     uart_write_bytes(esp_nextion_display->uart_port, "\xFF\xFF\xFF", 3);
 
-    esp_nextion_display->decode_resources = calloc(1, sizeof(nextion_msg_decode_resources_t));
-
-    NEXTION_CHECK(esp_nextion_display->decode_resources, "Allocation resources error", err_mem);
-
-    nextion_err_t err;
-    esp_nextion_display->decode_resources->err = &err;
-
-    if (esp_nextion_display->system_variables.bkcmd == 0)
-    {
-        err = NEXTION_SUCCESFULL_INSTRUCTION;
-    }
-    else if (xSemaphoreTake(esp_nextion_display->process_sem, pdMS_TO_TICKS(250)) == pdFALSE)
-    {
-        // When bkcmd = 2, display only returns message if there is an error, so if we don't get return, we suppose it's ok
-        if (esp_nextion_display->system_variables.bkcmd == 2)
-        {
-            err = NEXTION_SUCCESFULL_INSTRUCTION;
-        }
-        else // bkcmd = 1 | bkcmd = 3
-        {
-            err = NEXTION_TIMEOUT;
-        }
-    }
-
-    free(esp_nextion_display->decode_resources);
-    esp_nextion_display->decode_resources = NULL;
-
-    return err;
+    return esp_nextion_display_wait_response(esp_nextion_display, NULL, NULL);
 err_args:
     return NEXTION_INVALID_ARGS;
-err_mem:
-    return NEXTION_MEM_ERR;
 }
 
+/**
+ * @brief Used when you want to recover number from any object. Display return value 0x71
+ * 
+ * @param display[in]   display object
+ * @param cmd[in]       cmd to send
+ * @param number[out]   number returned
+ * @return nextion_err_t
+ *      - NEXTION_ERR_T value on transfer success
+ *      - NEXTION_INVALID_ARGS  if any param is NULL
+ *      - NEXTION_MEM_ERR if error allocation decode resources
+ *      - Header value returned by display
+ */
+static nextion_err_t esp_nextion_display_send_cmd_get_number(const nextion_display_t *display, const char *cmd, int32_t *number)
+{
+    NEXTION_CHECK(cmd, "CMD is null", err_args);
+    NEXTION_CHECK(display, "Display is NULL", err_args);
+    NEXTION_CHECK(number, "Number is null", err_args);
+
+    esp_nextion_display_t *esp_nextion_display = __containerof(display, esp_nextion_display_t, parent);
+
+    uart_write_bytes(esp_nextion_display->uart_port, cmd, strlen(cmd));
+    uart_write_bytes(esp_nextion_display->uart_port, "\xFF\xFF\xFF", 3);
+
+    return esp_nextion_display_wait_response(esp_nextion_display, number, NULL);
+err_args:
+    return NEXTION_INVALID_ARGS;
+}
+
+/**
+ * @brief Used when you want to recover string from any object. Display return value 0x70
+ * 
+ * @param display[in]   display object
+ * @param cmd[in]       cmd to send
+ * @param string_ret[out]   string returned    
+ * @param size_ret[out]     size of string return 
+ * @return nextion_err_t
+ *      - NEXTION_ERR_T value on transfer success
+ *      - NEXTION_INVALID_ARGS  if any param is NULL
+ *      - NEXTION_MEM_ERR if error allocation decode resources
+ *      - NEXTION_TIMEOUT
+ */
+static nextion_err_t esp_nextion_display_send_cmd_get_string(const nextion_display_t * display, const char *cmd, const char *string_ret, size_t *size_ret)
+{
+    NEXTION_CHECK(cmd, "CMD is null", err_args);
+    NEXTION_CHECK(display, "Display is NULL", err_args);
+    NEXTION_CHECK(string_ret, "String is null", err_args);
+    NEXTION_CHECK(size_ret, "Size is NULL", err_args);
+
+    esp_nextion_display_t *esp_nextion_display = __containerof(display, esp_nextion_display_t, parent);
+
+    uart_write_bytes(esp_nextion_display->uart_port, cmd, strlen(cmd));
+    uart_write_bytes(esp_nextion_display->uart_port, "\xFF\xFF\xFF", 3);
+
+    return esp_nextion_display_wait_response(esp_nextion_display, string_ret, size_ret);
+err_args:
+    return NEXTION_INVALID_ARGS;
+}
 /**
  * @brief Free display resources
  * 
@@ -366,6 +454,12 @@ static esp_err_t esp_nextion_display_deinit(nextion_display_t *display)
     return ESP_OK;
 }
 
+/**
+ * @brief Initial configuration for system variables
+ * 
+ * @param display 
+ * @param system_variables 
+ */
 static void esp_nextion_config_system_variables(esp_nextion_display_t *display, nextion_system_variables_t *system_variables)
 {
     nextion_system_variables_t sv = NEXTION_SYSTEM_VARIABLES_DEAFULT();
@@ -477,16 +571,17 @@ nextion_display_t *nextion_display_init(nextion_system_variables_t *system_varia
     /* Create Event loop */
     esp_event_loop_args_t loop_args = {
         .queue_size = NEXTION_EVENT_QUEUE_SIZE,
-        .task_name = "Nextion Ev Task",
+        .task_name = "Nextion EV Task",
         .task_stack_size = configMINIMAL_STACK_SIZE * 3,
     };
 
     NEXTION_CHECK(esp_event_loop_create(&loop_args, &display->event_loop_handle) == ESP_OK, "create event loop failed", err_eloop);
 
-    /* Create semaphore */
+    /* Create semaphore and mutex*/
     display->process_sem = xSemaphoreCreateBinary();
     NEXTION_CHECK(display->process_sem, "Create process semaphore failed", err_sem);
-
+    display->access_mutex = xSemaphoreCreateMutex();
+    NEXTION_CHECK(display->access_mutex, "Create mutext failed", err_mux);
     /* Create UART Event task */
     BaseType_t ret = xTaskCreate(uart_event_task,                   //Task Entry
                                  "uart_event",                      //Task Name
@@ -496,9 +591,15 @@ nextion_display_t *nextion_display_init(nextion_system_variables_t *system_varia
                                  &(display->uart_event_task_handle) //Task Handler
     );
     NEXTION_CHECK(ret == pdTRUE, "create uart event task failed", err_tsk_create);
+
+    /* Ensure Uart and Nextion are syncronized sending 0xFF 0xFF 0xFF to clean possible garbage on transmission*/
+    display->parent.send_cmd(&display->parent, "");
+
     return &(display->parent);
 
 err_tsk_create:
+    vSemaphoreDelete(display->access_mutex);
+err_mux:
     vSemaphoreDelete(display->process_sem);
 err_sem:
     esp_event_loop_delete(display->event_loop_handle);
@@ -517,13 +618,13 @@ err_mem:
     return NULL;
 }
 
-esp_err_t nextion_register_event_handler(nextion_display_t *display, nextion_event_t event_id, esp_event_handler_t handler, void *handler_args)
+esp_err_t nextion_register_event_handler(const nextion_display_t *display, nextion_event_t event_id, esp_event_handler_t handler, void *handler_args)
 {
     esp_nextion_display_t *esp_nextion_display = __containerof(display, esp_nextion_display_t, parent);
     return esp_event_handler_register_with(esp_nextion_display->event_loop_handle, NEXTION_EVENT, event_id, handler, handler_args);
 }
 
-esp_err_t nextion_unregister_event_handler(nextion_display_t *display, nextion_event_t event_id, esp_event_handler_t handler)
+esp_err_t nextion_unregister_event_handler(const nextion_display_t *display, nextion_event_t event_id, esp_event_handler_t handler)
 {
     esp_nextion_display_t *esp_nextion_display = __containerof(display, esp_nextion_display_t, parent);
     return esp_event_handler_unregister_with(esp_nextion_display->event_loop_handle, NEXTION_EVENT, event_id, handler);
